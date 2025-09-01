@@ -1,37 +1,70 @@
 import axios from "axios";
+import * as cheerio from "cheerio";
 import nodemailer from "nodemailer";
+import fs from "fs";
 
 const url = "https://exam.eclexam.eu/?id=TL7R1R";
 const mpa = "fbsr vyvr oqot pcyd"; // mot de passe d'application Gmail
-// 🔹 Emails des utilisateurs
 const EMAILS = ["ivansilatsa@gmail.com", "carloskakeusilatsa@gmail.com"];
 
-// 🔹 Config Telegram
-const TELEGRAM_TOKEN = "TON_TOKEN";
-const CHAT_IDS = ["12345678", "87654321"];
+// 🔹 Fichier pour stocker le dernier état connu
+const STATE_FILE = "./lastState.txt";
+
+// Charger dernier état
+function loadLastState() {
+  if (fs.existsSync(STATE_FILE)) {
+    return fs.readFileSync(STATE_FILE, "utf-8");
+  }
+  return "unknown";
+}
+
+// Sauvegarder nouvel état
+function saveLastState(state) {
+  fs.writeFileSync(STATE_FILE, state, "utf-8");
+}
 
 // Vérification
-async function checkECL() {
+async function checkECL(retry = 0) {
   try {
     const res = await axios.get(url);
     const html = res.data;
 
-    const closedText1 = "It is currently not possible to apply for an exam.";
-    const closedText2 = "The next application period will open soon.";
+    const $ = cheerio.load(html);
+
+    // Récupérer les <p> dans #objMain
+    const messages = $("#objMain p.sN")
+      .map((i, el) => $(el).text().trim())
+      .get();
+
+    console.log("📋 Messages extraits :", messages);
 
     const inscriptionsFermees =
-      !html.includes(closedText1) && html.includes(closedText2);
+     ! messages.includes("It is currently not possible to apply for an exam.") &&
+      messages.includes("The next application period will open soon.");
 
-    if (!inscriptionsFermees) {
-      const msg = "🎉 Les inscriptions ECL sont OUVERTES !";
-      console.log(msg);
-      await sendMail(msg);
-      //   await sendTelegram(msg);
+    const newState = inscriptionsFermees ? "ferme" : "ouvert";
+    const lastState = loadLastState();
+
+    if (newState !== lastState) {
+      // Seulement si changement d'état
+      if (newState === "ouvert") {
+        const msg = "🎉 Les inscriptions ECL sont OUVERTES !";
+        console.log(msg);
+        await sendMail(msg);
+        // await sendTelegram(msg);
+      } else {
+        console.log("⛔️ Les inscriptions viennent de se fermer.");
+      }
+      saveLastState(newState);
     } else {
-      console.log("⏳ Pas encore ouvert...");
+      console.log(`⏳ Pas de changement (${newState})...`);
     }
   } catch (err) {
     console.error("❌ Erreur :", err.message);
+    if (retry < 3) {
+      console.log("🔁 Retry...");
+      setTimeout(() => checkECL(retry + 1), 5000); // réessaye dans 5 sec
+    }
   }
 }
 
@@ -54,19 +87,6 @@ async function sendMail(message) {
            <p>👉 Vérifie vite : <a href="${url}">Lien d'inscription</a></p>`,
   });
   console.log("📧 Email envoyé !");
-}
-
-// Envoi Telegram
-async function sendTelegram(message) {
-  for (const chatId of CHAT_IDS) {
-    await axios.post(
-      `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`,
-      {
-        chat_id: chatId,
-        text: message,
-      }
-    );
-  }
 }
 
 // Vérification toutes les 30 minutes
