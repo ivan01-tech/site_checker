@@ -39,7 +39,7 @@ async function checkECL(retry = 0) {
     console.log("📋 Messages extraits :", messages);
 
     const inscriptionsFermees =
-     ! messages.includes("It is currently not possible to apply for an exam.") &&
+     messages.includes("It is currently not possible to apply for an exam.") &&
       messages.includes("The next application period will open soon.");
 
     const newState = inscriptionsFermees ? "ferme" : "ouvert";
