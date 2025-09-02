@@ -1,56 +1,26 @@
-// app.js
 import express from "express";
 import axios from "axios";
 import * as cheerio from "cheerio";
 import nodemailer from "nodemailer";
-import fs from "fs";
 import dotenv from "dotenv";
+import { db } from "./firebase.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MAIL_USER = "ivansilatsa@gmail.com";
-const MAIL_APP_PASSWORD = process.env.MAIL_APP_PASSWORD || "fbsr vyvr oqot pcyd"; // Utilisez une variable d'environnement
-const OWNER_EMAIL = ["ivansilatsa@gmail.com","carloskakeusilatsa"]; // Votre e-mail pour les notifications
+const MAIL_APP_PASSWORD =
+  process.env.MAIL_APP_PASSWORD || "fbsr vyvr oqot pcyd"; // Utilisez une variable d'environnement
+const OWNER_EMAIL = ["ivansilatsa@gmail.com", "carloskakeusilatsa@gmail.com"]; // Votre e-mail pour les notifications
+
 // ---------- CONFIG ----------
 const URL = "https://exam.eclexam.eu/?id=TL7R1R"; // page ECL Cameroun
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 min
-const STATE_FILE = "./data/state.json";
-const SUBS_FILE = "./data/subscribers.json";
 
-// ---------- PREP DOSSIERS/FILES ----------
-fs.mkdirSync("./data", { recursive: true });
-if (!fs.existsSync(STATE_FILE))
-  fs.writeFileSync(
-    STATE_FILE,
-    JSON.stringify({ status: "unknown", lastCheck: null }),
-    "utf-8"
-  );
-if (!fs.existsSync(SUBS_FILE))
-  fs.writeFileSync(SUBS_FILE, JSON.stringify({ emails: [] }, null, 2), "utf-8");
-
-// ---------- HELPERS PERSISTENCE ----------
-function loadState() {
-  try {
-    return JSON.parse(fs.readFileSync(STATE_FILE, "utf-8"));
-  } catch {
-    return { status: "unknown", lastCheck: null };
-  }
-}
-function saveState(newState) {
-  fs.writeFileSync(STATE_FILE, JSON.stringify(newState, null, 2), "utf-8");
-}
-function loadSubs() {
-  try {
-    return JSON.parse(fs.readFileSync(SUBS_FILE, "utf-8"));
-  } catch {
-    return { emails: [] };
-  }
-}
-function saveSubs(data) {
-  fs.writeFileSync(SUBS_FILE, JSON.stringify(data, null, 2), "utf-8");
-}
+// ---------- FIRESTORE COLLECTIONS ----------
+const STATE_COLLECTION = "appState";
+const SUBS_COLLECTION = "subscribers";
 
 // ---------- EMAIL TRANSPORT ----------
 const transporter = nodemailer.createTransport({
@@ -62,7 +32,7 @@ const transporter = nodemailer.createTransport({
 });
 
 async function sendMailToAll(subject, htmlMessage) {
-  const { emails } = loadSubs();
+  const emails = await loadSubs();
   if (!emails.length) return;
   console.log("MAIL_USER:", MAIL_USER);
 
@@ -84,7 +54,7 @@ async function sendOwnerNotification(newEmail, allEmails) {
     <p>Un nouvel e-mail s'est abonné : <strong>${newEmail}</strong></p>
     <h3>Liste complète des abonnés :</h3>
     <ul>
-      ${allEmails.map(email => `<li>${email}</li>`).join("")}
+      ${allEmails.map((email) => `<li>${email}</li>`).join("")}
     </ul>
     <p>Date : ${new Date().toLocaleString()}</p>
     <p>Cette notification vous est envoyée car vous êtes le propriétaire du service.</p>
@@ -115,7 +85,9 @@ async function fetchPageWithRetry(retries = 3, delayMs = 5000) {
 
 function extractStatus(html) {
   const $ = cheerio.load(html);
-  const messages = $("#objMain p.sN").map((i, el) => $(el).text().trim()).get();
+  const messages = $("#objMain p.sN")
+    .map((i, el) => $(el).text().trim())
+    .get();
   const isClosed =
     messages.includes("It is currently not possible to apply for an exam.") &&
     messages.includes("The next application period will open soon.");
@@ -126,7 +98,7 @@ async function checkECLAndNotify() {
   try {
     const html = await fetchPageWithRetry();
     const { status, rawMessages } = extractStatus(html);
-    const prev = loadState();
+    const prev = await loadState();
     const now = new Date().toISOString();
     console.log(`🕒 Vérifié à ${now} → ${status.toUpperCase()}`);
 
@@ -157,16 +129,42 @@ async function checkECLAndNotify() {
         await sendMailToAll(subject, htmlMsg);
       }
     }
-    saveState({ status, lastCheck: now, messages: rawMessages });
+    await saveState({ status, lastCheck: now, messages: rawMessages });
   } catch (err) {
     console.error("❌ Erreur de vérification :", err.message);
-    const prev = loadState();
-    saveState({
+    const prev = await loadState();
+    await saveState({
       ...prev,
       lastCheck: new Date().toISOString(),
       error: err.message,
     });
   }
+}
+
+// ---------- FIRESTORE HELPERS ----------
+async function loadState() {
+  const snapshot = await db.collection(STATE_COLLECTION).get();
+  if (snapshot.empty) {
+    return { status: "unknown", lastCheck: null };
+  }
+  return snapshot.docs[0].data();
+}
+
+async function saveState(newState) {
+  const snapshot = await db.collection(STATE_COLLECTION).get();
+  if (snapshot.empty) {
+    await db.collection(STATE_COLLECTION).doc("state").set(newState);
+  } else {
+    await db
+      .collection(STATE_COLLECTION)
+      .doc(snapshot.docs[0].id)
+      .set(newState);
+  }
+}
+
+async function loadSubs() {
+  const snapshot = await db.collection(SUBS_COLLECTION).get();
+  return snapshot.docs.map((doc) => doc.data().email);
 }
 
 // ---------- PLANIF ----------
@@ -215,9 +213,9 @@ const baseCss = `
 `;
 
 // ---------- ROUTES ----------
-app.get("/", (req, res) => {
-  const state = loadState();
-  const subs = loadSubs();
+app.get("/", async (req, res) => {
+  const state = await loadState();
+  const subs = await loadSubs();
 
   const isOpen = state.status === "open";
   const statusClass = isOpen ? "open" : "closed";
@@ -267,7 +265,7 @@ app.get("/", (req, res) => {
                 <input type="email" id="email" name="email" placeholder="ex: nom@gmail.com" required>
                 <div style="margin-top:10px; display:flex; gap:8px;">
                   <button type="submit">S'abonner</button>
-                  <span class="muted">Abonnés : ${subs.emails.length}</span>
+                  <span class="muted">Abonnés : ${subs.length}</span>
                 </div>
               </form>
             </section>
@@ -312,7 +310,7 @@ app.get("/", (req, res) => {
   `);
 });
 
-app.post("/subscribe", (req, res) => {
+app.post("/subscribe", async (req, res) => {
   const email = (req.body.email || "").trim().toLowerCase();
 
   const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -320,14 +318,18 @@ app.post("/subscribe", (req, res) => {
     return res.status(400).send("Email invalide. <a href='/'>Retour</a>");
   }
 
-  const data = loadSubs();
-  if (!data.emails.includes(email)) {
-    data.emails.push(email);
-    saveSubs(data);
+  const subs = await loadSubs();
+  if (!subs.includes(email)) {
+    await db.collection(SUBS_COLLECTION).doc(email).set({
+      email,
+      createdAt: new Date(),
+    });
     console.log(`➕ Abonné: ${email}`);
 
     // Notifier le propriétaire de la nouvelle inscription
-    sendOwnerNotification(email, data.emails).catch(err => console.error("Erreur lors de la notification au propriétaire :", err));
+    sendOwnerNotification(email, subs).catch((err) =>
+      console.error("Erreur lors de la notification au propriétaire :", err)
+    );
   }
   res.redirect("/");
 });
