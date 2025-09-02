@@ -4,14 +4,14 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import nodemailer from "nodemailer";
 import fs from "fs";
-import path from "path";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
+const MAIL_USER = "ivansilatsa@gmail.com";
+const MAIL_APP_PASSWORD = "fbsr vyvr oqot pcyd";
 // ---------- CONFIG ----------
 const URL = "https://exam.eclexam.eu/?id=TL7R1R"; // page ECL Cameroun
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 min
@@ -55,17 +55,18 @@ function saveSubs(data) {
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.MAIL_USER, // ex: "tonmail@gmail.com"
-    pass: process.env.MAIL_APP_PASSWORD, // mot de passe d'application Gmail
+    user: MAIL_USER, // ex: "tonmail@gmail.com"
+    pass: MAIL_APP_PASSWORD, // mot de passe d'application Gmail
   },
 });
 
 async function sendMailToAll(subject, htmlMessage) {
   const { emails } = loadSubs();
   if (!emails.length) return;
+  console.log("MAIL_USER:", MAIL_USER);
 
   await transporter.sendMail({
-    from: process.env.MAIL_USER,
+    from: MAIL_USER,
     to: emails, // envoi groupé
     subject,
     text: htmlMessage.replace(/<[^>]+>/g, ""), // fallback texte
@@ -185,6 +186,22 @@ const baseCss = `
   button:disabled { opacity:.6; cursor:not-allowed; }
   ul { margin:8px 0 0 18px; }
   .pill { display:inline-block; padding:3px 8px; border-radius:999px; background:#f1f5f9; font-size:12px; }
+
+
+  .footer {
+  text-align: center;
+  padding: 15px;
+  background: #0a0a0a;
+  color: #f0f0f0;
+  font-size: 14px;
+  margin-top: 50px;
+  border-top: 1px solid #333;
+}
+
+.footer strong {
+  color: #4cafef;
+}
+
 `;
 
 // ---------- ROUTES ----------
@@ -254,7 +271,35 @@ app.get("/", (req, res) => {
             )} minutes.</p>
           </section>
         </div>
+
+
+
+        <section class="card" style="margin-top:14px; text-align:center;">
+  <h3>🙏 Soutenir le projet</h3>
+  <p style="font-size:14px;color:#444;">
+    Ce service est gratuit. Si tu veux m’encourager ☕💻 :
+  </p>
+  <div style="margin-top:10px; font-size:14px; line-height:1.6;">
+    <strong>Orange Money / MTN</strong><br>
+    <span style="background:#f1f5f9; padding:6px 10px; border-radius:8px; display:inline-block; margin:4px 0;">
+      +237 697 835 612
+    </span><br>
+    <span style="background:#f1f5f9; padding:6px 10px; border-radius:8px; display:inline-block; margin:4px 0;">
+      +237 681 832 508
+    </span><br>
+    <em>Nom : SILATSA IVAN</em>
+  </div>
+  <p class="muted" style="margin-top:8px;">Merci pour ton soutien 🙌</p>
+</section>
+
       </main>
+
+
+      <!-- Pied de page -->
+<footer class="footer">
+  <p>© 2025 | Développé avec ❤️ par <a href="https://silatsa-ivan.vercel.app">Ivan Silatsa</a></p>
+</footer>
+
     </body>
     </html>
   `);
