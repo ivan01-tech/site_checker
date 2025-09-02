@@ -12,7 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const MAIL_USER = "ivansilatsa@gmail.com";
 const MAIL_APP_PASSWORD = process.env.MAIL_APP_PASSWORD || "fbsr vyvr oqot pcyd"; // Utilisez une variable d'environnement
-const OWNER_EMAIL = "ivansilatsa@gmail.com"; // Votre e-mail pour les notifications
+const OWNER_EMAIL = ["ivansilatsa@gmail.com","carloskakeusilatsa"]; // Votre e-mail pour les notifications
 // ---------- CONFIG ----------
 const URL = "https://exam.eclexam.eu/?id=TL7R1R"; // page ECL Cameroun
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 min
