@@ -11,7 +11,8 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MAIL_USER = "ivansilatsa@gmail.com";
-const MAIL_APP_PASSWORD = "fbsr vyvr oqot pcyd";
+const MAIL_APP_PASSWORD = process.env.MAIL_APP_PASSWORD || "fbsr vyvr oqot pcyd"; // Utilisez une variable d'environnement
+const OWNER_EMAIL = "ivansilatsa@gmail.com"; // Votre e-mail pour les notifications
 // ---------- CONFIG ----------
 const URL = "https://exam.eclexam.eu/?id=TL7R1R"; // page ECL Cameroun
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 min
@@ -55,8 +56,8 @@ function saveSubs(data) {
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: MAIL_USER, // ex: "tonmail@gmail.com"
-    pass: MAIL_APP_PASSWORD, // mot de passe d'application Gmail
+    user: MAIL_USER,
+    pass: MAIL_APP_PASSWORD,
   },
 });
 
@@ -67,12 +68,35 @@ async function sendMailToAll(subject, htmlMessage) {
 
   await transporter.sendMail({
     from: MAIL_USER,
-    to: emails, // envoi groupé
+    to: emails,
     subject,
-    text: htmlMessage.replace(/<[^>]+>/g, ""), // fallback texte
+    text: htmlMessage.replace(/<[^>]+>/g, ""),
     html: htmlMessage,
   });
   console.log(`📧 Email envoyé à ${emails.length} abonnés`);
+}
+
+// Fonction pour notifier le propriétaire
+async function sendOwnerNotification(newEmail, allEmails) {
+  const subject = "Nouvel abonné à Alertes ECL";
+  const htmlMessage = `
+    <h2>Nouvel abonné détecté !</h2>
+    <p>Un nouvel e-mail s'est abonné : <strong>${newEmail}</strong></p>
+    <h3>Liste complète des abonnés :</h3>
+    <ul>
+      ${allEmails.map(email => `<li>${email}</li>`).join("")}
+    </ul>
+    <p>Date : ${new Date().toLocaleString()}</p>
+    <p>Cette notification vous est envoyée car vous êtes le propriétaire du service.</p>
+  `;
+  await transporter.sendMail({
+    from: MAIL_USER,
+    to: OWNER_EMAIL,
+    subject,
+    text: htmlMessage.replace(/<[^>]+>/g, ""),
+    html: htmlMessage,
+  });
+  console.log(`📧 Notification envoyée au propriétaire (${OWNER_EMAIL})`);
 }
 
 // ---------- CORE CHECK (avec retry) ----------
@@ -91,31 +115,21 @@ async function fetchPageWithRetry(retries = 3, delayMs = 5000) {
 
 function extractStatus(html) {
   const $ = cheerio.load(html);
-  // Les messages sont des <p class="sN"> sous #objMain
-  const messages = $("#objMain p.sN")
-    .map((i, el) => $(el).text().trim())
-    .get();
-
+  const messages = $("#objMain p.sN").map((i, el) => $(el).text().trim()).get();
   const isClosed =
     messages.includes("It is currently not possible to apply for an exam.") &&
     messages.includes("The next application period will open soon.");
-
-  return {
-    status: isClosed ? "closed" : "open",
-    rawMessages: messages,
-  };
+  return { status: isClosed ? "closed" : "open", rawMessages: messages };
 }
 
 async function checkECLAndNotify() {
   try {
     const html = await fetchPageWithRetry();
     const { status, rawMessages } = extractStatus(html);
-
     const prev = loadState();
     const now = new Date().toISOString();
     console.log(`🕒 Vérifié à ${now} → ${status.toUpperCase()}`);
 
-    // Notifier uniquement si changement d'état
     if (prev.status !== status && prev.status !== "unknown") {
       if (status === "open") {
         const subject = "🎉 ECL : Les inscriptions sont OUVERTES !";
@@ -143,11 +157,9 @@ async function checkECLAndNotify() {
         await sendMailToAll(subject, htmlMsg);
       }
     }
-
     saveState({ status, lastCheck: now, messages: rawMessages });
   } catch (err) {
     console.error("❌ Erreur de vérification :", err.message);
-    // On met quand même à jour l'heure de check pour le dashboard
     const prev = loadState();
     saveState({
       ...prev,
@@ -187,7 +199,6 @@ const baseCss = `
   ul { margin:8px 0 0 18px; }
   .pill { display:inline-block; padding:3px 8px; border-radius:999px; background:#f1f5f9; font-size:12px; }
 
-
   .footer {
   text-align: center;
   padding: 15px;
@@ -201,7 +212,6 @@ const baseCss = `
 .footer strong {
   color: #4cafef;
 }
-
 `;
 
 // ---------- ROUTES ----------
@@ -272,33 +282,30 @@ app.get("/", (req, res) => {
           </section>
         </div>
 
-
-
         <section class="card" style="margin-top:14px; text-align:center;">
-  <h3>🙏 Soutenir le projet</h3>
-  <p style="font-size:14px;color:#444;">
-    Ce service est gratuit. Si tu veux m’encourager ☕💻 :
-  </p>
-  <div style="margin-top:10px; font-size:14px; line-height:1.6;">
-    <strong>Orange Money / MTN</strong><br>
-    <span style="background:#f1f5f9; padding:6px 10px; border-radius:8px; display:inline-block; margin:4px 0;">
-      +237 697 835 612
-    </span><br>
-    <span style="background:#f1f5f9; padding:6px 10px; border-radius:8px; display:inline-block; margin:4px 0;">
-      +237 681 832 508
-    </span><br>
-    <em>Nom : SILATSA IVAN</em>
-  </div>
-  <p class="muted" style="margin-top:8px;">Merci pour ton soutien 🙌</p>
-</section>
+          <h3>🙏 Soutenir le projet</h3>
+          <p style="font-size:14px;color:#444;">
+            Ce service est gratuit. Si tu veux m’encourager ☕💻 :
+          </p>
+          <div style="margin-top:10px; font-size:14px; line-height:1.6;">
+            <strong>Orange Money / MTN</strong><br>
+            <span style="background:#f1f5f9; padding:6px 10px; border-radius:8px; display:inline-block; margin:4px 0;">
+              +237 697 835 612
+            </span><br>
+            <span style="background:#f1f5f9; padding:6px 10px; border-radius:8px; display:inline-block; margin:4px 0;">
+              +237 681 832 508
+            </span><br>
+            <em>Nom : SILATSA IVAN</em>
+          </div>
+          <p class="muted" style="margin-top:8px;">Merci pour ton soutien 🙌</p>
+        </section>
 
       </main>
 
-
       <!-- Pied de page -->
-<footer class="footer">
-  <p>© 2025 | Développé avec ❤️ par <a href="https://silatsa-ivan.vercel.app">Ivan Silatsa</a></p>
-</footer>
+      <footer class="footer">
+        <p>© 2025 | Développé avec ❤️ par <a href="https://silatsa-ivan.vercel.app">Ivan Silatsa</a></p>
+      </footer>
 
     </body>
     </html>
@@ -318,6 +325,9 @@ app.post("/subscribe", (req, res) => {
     data.emails.push(email);
     saveSubs(data);
     console.log(`➕ Abonné: ${email}`);
+
+    // Notifier le propriétaire de la nouvelle inscription
+    sendOwnerNotification(email, data.emails).catch(err => console.error("Erreur lors de la notification au propriétaire :", err));
   }
   res.redirect("/");
 });
