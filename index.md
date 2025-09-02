@@ -1,4 +1,4 @@
-// api/check-ecl.js
+<!-- // api/check-ecl.js
 import axios from "axios";
 import * as cheerio from "cheerio";
 import nodemailer from "nodemailer";
@@ -86,5 +86,4 @@ async function checkECL() {
 export default async function handler(req, res) {
   const result = await checkECL();
   res.status(result.status).json({ message: result.message });
-}
-
+} -->
