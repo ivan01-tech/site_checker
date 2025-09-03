@@ -86,4 +86,20 @@ async function checkECL() {
 export default async function handler(req, res) {
   const result = await checkECL();
   res.status(result.status).json({ message: result.message });
-} -->
+}
+
+
+En analysant la liste fournie, voici les emails uniques après suppression des doublons :
+
+ivansilatsa@gmail.com
+carloskakeusilatsa@gmail.com
+chouapiruth@gmail.com
+aschleykafack@gmail.com
+maureyfeulefack0@gmail.com
+rostelledjousse5@gmail.com
+arletteyoumbi93@gmail.com
+simonnedjeugoue@icloud.com
+lynnchekina@gmail.com
+=====
+
+ -->
