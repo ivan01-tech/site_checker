@@ -16,7 +16,8 @@ const OWNER_EMAIL = ["ivansilatsa@gmail.com", "carloskakeusilatsa@gmail.com"]; /
 
 // ---------- CONFIG ----------
 const URL = "https://exam.eclexam.eu/?id=TL7R1R"; // page ECL Cameroun
-const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 min
+// const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 min
+const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 30 min
 
 // ---------- FIRESTORE COLLECTIONS ----------
 const STATE_COLLECTION = "appState";
@@ -89,7 +90,7 @@ function extractStatus(html) {
     .map((i, el) => $(el).text().trim())
     .get();
   const isClosed =
-    messages.includes("It is currently not possible to apply for an exam.") &&
+    messages.includes("It is currently not possible to apply for an exam.") ||
     messages.includes("The next application period will open soon.");
   return { status: isClosed ? "closed" : "open", rawMessages: messages };
 }
