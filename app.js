@@ -4,6 +4,7 @@ import * as cheerio from "cheerio";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import { db } from "./firebase.js";
+import { DateTime } from "luxon";
 
 dotenv.config();
 
@@ -225,6 +226,14 @@ app.get("/", async (req, res) => {
     : state.status === "unknown"
     ? "INCONNU"
     : "FERMÉ";
+
+  // Conversion en heure du Cameroun (UTC+1, "Africa/Douala")
+  const cameroonTime = state.lastCheck
+    ? DateTime.fromISO(state.lastCheck)
+        .setZone("Africa/Douala")
+        .toFormat("dd/MM/yyyy HH:mm:ss")
+    : "Jamais vérifié";
+
   const lastCheck = state.lastCheck
     ? new Date(state.lastCheck).toLocaleString()
     : "—";
@@ -250,7 +259,8 @@ app.get("/", async (req, res) => {
         <div class="wrap">
           <div class="status ${statusClass}">
             <span>Statut actuel : ${statusLabel}</span>
-            <span class="pill">Dernier check : ${lastCheck}</span>
+                        <span class="pill">Dernier check : ${lastCheck} (UTC) </span>
+
           </div>
 
           <div class="grid" style="margin-top:14px;">
